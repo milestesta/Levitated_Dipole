@@ -25,6 +25,7 @@ class Levitated_Dipole_Equilibrium{
 
         //plasma parameters
         double psi_max;
+        double mu_0;
 
 
         //Grids needed for the solver _-_-_-_-_-
@@ -74,7 +75,7 @@ class Levitated_Dipole_Equilibrium{
         //Iterative solver tools _-_-_-_-_-
         std::vector<std::vector<double> > calculate_pressure(std::vector<std::vector<double> >& generic_psi_grid);
         void single_iteration(); //Runs a single round of the SOR iterator. 
-        void tolerance_check(); //Samples the resulting solution to make sure that the next iteration is necessary.
+        double tolerance_check(); //Samples the resulting solution to make sure that the next iteration is necessary.
         void solver(); //Runs the SOR solver. 
 
         //Data Output tools _-_-_-_-_-

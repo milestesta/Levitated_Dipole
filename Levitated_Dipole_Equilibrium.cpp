@@ -10,15 +10,16 @@ Levitated_Dipole_Equilibrium::Levitated_Dipole_Equilibrium() {
         chamber_height = 6.0; //height of the dipole containment chamber. 
 
         //Simulation Parameters _-_-_-_-_-
-        NR = 20; //number of horizontal grid points.
-        NZ = 20; //number of vertical grid points.
-        relaxation = 0.3; //The relaxation paramter in the SOR solver.
-        tolerance = 1.e-5; //User specified tolerance at which point to stop the solver.
+        NR = 50; //number of horizontal grid points.
+        NZ = 50; //number of vertical grid points.
+        relaxation = 0.9; //The relaxation paramter in the SOR solver.
+        tolerance = 1.e-4; //User specified tolerance at which point to stop the solver.
 
         DZ = chamber_height/NZ;
         DR = chamber_width/NR;
         //plasma parameters
         psi_max = 1.0;
+        mu_0 = 1.6;
 
         //Grids needed for the solver _-_-_-_-_-
 /*         current_psi_grid = Levitated_Dipole_Equilibrium::current_psi_grid; //This grid stores the most recent value of the flux at each grid point in the domain.  
@@ -92,7 +93,6 @@ void Levitated_Dipole_Equilibrium::initialise_label_grid(){
     }
 
     for(int i = 0; i < NR; i++){
-        R = i*DZ;
         for (int j = 0; j < NZ; j++){
             std::cout << label_grid[i][j];
         }
@@ -178,21 +178,72 @@ void Levitated_Dipole_Equilibrium::initialise_pressure_grid(){
 };
 
 void Levitated_Dipole_Equilibrium::single_iteration(){
+    double gamma = 0;
+    double temp_psi = 0;
 
+    for(int i = 0; i < NR; i++){
+        for(int j =0; j < NZ; j++){
+            previous_psi_grid[i][j] = current_psi_grid[i][j];
+        }
+    for(int i = 1; i < NR; i++){
+        for(int j =0; j < NZ; j++){
+            if(label_grid[i][j] == 0){
+                gamma = mu_0*(i*DR*i*DR)*2*M_PI*cos((previous_psi_grid[i][j]/psi_max)*2*M_PI); //pressure derivative
+                temp_psi = (1/((2/(DR*DR))+(2/(DZ*DZ))))*(((previous_psi_grid[i-1][j] + previous_psi_grid[i+1][j])/(DR*DR)) + ((previous_psi_grid[i][j+1] + (previous_psi_grid[i][j-1]))/(DZ*DZ)) - ((previous_psi_grid[i+1][j] - previous_psi_grid[i-1][j])/(i*DR*2*DR)) - gamma);
+                current_psi_grid[i][j] = (relaxation*previous_psi_grid[i][j]) + ((1-relaxation)*(temp_psi)); 
+            }
+        }
+    }
+    for(int j = 1; j < NZ-1; j++){
+        current_psi_grid[0][j] = current_psi_grid[1][j]; //setting the derivative at the relfection point = 0.  
+    }
+    }    
+    for(int i = 0; i < NR; i++){
+        for(int j =0; j < NZ; j++){
+            previous_pressure_grid[i][j] = current_pressure_grid[i][j];
+        }
+    }
+
+
+    current_pressure_grid = calculate_pressure(current_psi_grid);
+
+
+    for(int i = 0; i < NR; i++){
+        for (int j = 0; j < NZ; j++){
+            std::cout << current_pressure_grid[i][j] << " ";
+        }
+        std::cout << "\n";
+    }
 };
 
-void Levitated_Dipole_Equilibrium::tolerance_check(){
-
+double Levitated_Dipole_Equilibrium::tolerance_check(){
+    double epsilon = 0;
+    for(int i = 0; i < NR; i++){
+        for(int j =0; j < NZ; j++){
+            epsilon += abs(current_pressure_grid[i][j] - previous_pressure_grid[i][j]);
+        }
+    }
+    epsilon = epsilon/(NR*NZ);
+    return(epsilon);
 };
 
 void Levitated_Dipole_Equilibrium::solver(){
-
+    double epsilon = 1;
+    int iteration_number = 0;
+    while((epsilon > tolerance) && (iteration_number < 500)){
+        single_iteration();
+        epsilon = tolerance_check();
+        iteration_number += 1;
+        std::cout << iteration_number << "\n";
+        std::cout << epsilon << "\n";
+    }
 };
 
 
 int main(){
-    Levitated_Dipole_Equilibrium equilibrium;
+Levitated_Dipole_Equilibrium equilibrium;
     equilibrium.initialise_label_grid();
     equilibrium.initialise_psi_grid();
     equilibrium.initialise_pressure_grid();
+    equilibrium.solver();
 };
