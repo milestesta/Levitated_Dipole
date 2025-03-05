@@ -10,10 +10,15 @@ Levitated_Dipole_Equilibrium::Levitated_Dipole_Equilibrium() {
         chamber_height = 6.0; //height of the dipole containment chamber. 
 
         //Simulation Parameters _-_-_-_-_-
-        NR = 100; //number of horizontal grid points.
-        NZ = 100; //number of vertical grid points.
+        NR = 20; //number of horizontal grid points.
+        NZ = 20; //number of vertical grid points.
         relaxation = 0.3; //The relaxation paramter in the SOR solver.
         tolerance = 1.e-5; //User specified tolerance at which point to stop the solver.
+
+        DZ = chamber_height/NZ;
+        DR = chamber_width/NR;
+        //plasma parameters
+        psi_max = 1.0;
 
         //Grids needed for the solver _-_-_-_-_-
 /*         current_psi_grid = Levitated_Dipole_Equilibrium::current_psi_grid; //This grid stores the most recent value of the flux at each grid point in the domain.  
@@ -56,27 +61,36 @@ void Levitated_Dipole_Equilibrium::initialise_label_grid(){
     double DZ = chamber_height/NZ; 
 
     for(int i; i < NR; i++){
+        label_grid[0][i] = 2;
         label_grid[i][0] = 1;
         label_grid[i][NZ-1] = 1;
         label_grid[NR-1][i] = 1;
-        label_grid[0][i] = 0;
     };
+    label_grid[0][0] = 2; //fixing the issue where the corner doesn't get labeled. 
+    for(int i = 1; i < NR; i++){
+        R = i*DZ;
+        for (int j = 1; j < NZ; j++){
+            Z = j*DZ;
+            //labeling the coil interior and a ring around it. 
+            if ((((R-coil_major_radius)*(R-coil_major_radius)) + ((Z-coil_height)*(Z-coil_height))) <= (coil_minor_radius*coil_minor_radius)){
+                label_grid[i+1][j] = 3;
+                label_grid[i-1][j] = 3;
+                label_grid[i][j+1] = 3;
+                label_grid[i][j-1] = 3;
+            } 
+        } 
+    }
 
     for(int i = 1; i < NR; i++){
         R = i*DZ;
         for (int j = 1; j < NZ; j++){
             Z = j*DZ;
-            //labeling the coild interior. 
             if ((((R-coil_major_radius)*(R-coil_major_radius)) + ((Z-coil_height)*(Z-coil_height))) <= (coil_minor_radius*coil_minor_radius)){
                 label_grid[i][j] = 4;
-            } 
-            
-            //labeling coil boundary. 
-            if (abs(((R-coil_major_radius)*(R-coil_major_radius)) + ((Z-coil_height)*(Z-coil_height)) - (coil_minor_radius*coil_minor_radius)) <= ((DR*DR) + (DZ*DZ))){
-                label_grid[i][j] = 3;
             }
         }
     }
+
     for(int i = 0; i < NR; i++){
         R = i*DZ;
         for (int j = 0; j < NZ; j++){
@@ -89,17 +103,77 @@ void Levitated_Dipole_Equilibrium::initialise_label_grid(){
 void Levitated_Dipole_Equilibrium::initialise_psi_grid(){
     //This function sets an initial value of psi that we can then iterate on. A suitable choice seems to be a dipole field, so for 
     //now that's just what I'll use. It sets both the previous and current psi grid to be this dipole field. 
+    double R = 0;
+    double Z = 0;
+    double r = 0; //The distance from the center of the dipole. 
+    double cos_theta = 0; //Spherical coordinates definition of theta. 
+    double dipole_psi = 0;
+
+    for(int i = 0; i < NR; i++){
+        R = i*DZ;
+        for (int j = 0; j < NZ; j++){
+            if(label_grid[i][j] == 0){
+                Z = j*DZ;
+                r = sqrt(((R-coil_major_radius)*(R-coil_major_radius)) + ((Z-coil_height)*(Z-coil_height)));
+                cos_theta = (Z-coil_height)/r;
+                dipole_psi = abs(cos_theta/(r*r)); //treating dipole and 4pi prefactor as = 1 for now. 
+                current_psi_grid[i][j] = dipole_psi;
+                previous_psi_grid[i][j] = dipole_psi;
+            }
+            else if (label_grid[i][j] == 3)
+            {
+                current_psi_grid[i][j] = 0;
+                previous_psi_grid[i][j] = 0;
+            }
+            else if (label_grid[i][j] == 1)
+            {
+                current_psi_grid[i][j] = psi_max;
+                previous_psi_grid[i][j] = psi_max;
+            }
+        }               
+    }
+
+    for(int i = 0; i < NR; i++){
+        R = i*DZ;
+        for (int j = 0; j < NZ; j++){
+            std::cout << current_psi_grid[i][j] << " ";
+        }
+        std::cout << "\n";
+    }
+
 
 };
 
-void Levitated_Dipole_Equilibrium::calculate_pressure(std::vector<std::vector<double> >& generic_psi_grid){
+std::vector<std::vector<double> > Levitated_Dipole_Equilibrium::calculate_pressure(std::vector<std::vector<double> >& generic_psi_grid){
     //This runs through and calculates the pressure at each point in a psi grid that is given to it. It requires that we specify a 
     //a functional form for the dependence of pressure on psi. This can be tailored by the user.
-
+    double psi = 0; //A temporary psi value for the computation.
+    double pressure = 0; //A temporaty pressure value for the computation.
+    std::vector<std::vector<double> > pressure_grid;
+    pressure_grid.resize(NR, std::vector<double>(NZ, 0.0));
+    for(int i = 0; i < NR; i++){
+        for(int j = 0; j < NZ; j++){
+            if(label_grid[i][j] == 0){
+                psi = generic_psi_grid[i][j];
+                pressure = psi_max*sin((psi/psi_max)*2*M_PI); //just a place holder that vanishes at the edge
+                pressure_grid[i][j] = pressure;
+            }
+        }
+    }
+    return(pressure_grid);
 };
 
 void Levitated_Dipole_Equilibrium::initialise_pressure_grid(){
     //This function uses the calculate_pressure function to assign a pressure to each point in the previous and current pressure grids. 
+    current_pressure_grid = calculate_pressure(current_psi_grid);
+    previous_pressure_grid = calculate_pressure(previous_pressure_grid);
+
+    for(int i = 0; i < NR; i++){
+        for (int j = 0; j < NZ; j++){
+            std::cout << current_pressure_grid[i][j] << " ";
+        }
+        std::cout << "\n";
+    }
 
 };
 
@@ -117,8 +191,8 @@ void Levitated_Dipole_Equilibrium::solver(){
 
 
 int main(){
-    std::cout << "did this shit work?" << "\n";
     Levitated_Dipole_Equilibrium equilibrium;
-    std::cout << "did this shit work?" << "\n";
-    equilibrium.initialise_label_grid();  
+    equilibrium.initialise_label_grid();
+    equilibrium.initialise_psi_grid();
+    equilibrium.initialise_pressure_grid();
 };

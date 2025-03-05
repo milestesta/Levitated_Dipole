@@ -20,6 +20,12 @@ class Levitated_Dipole_Equilibrium{
         int NZ; //number of vertical grid points.
         double relaxation; //The relaxation paramter in the SOR solver.
         double tolerance; //User specified tolerance at which point to stop the solver.
+        double DR; //space between R grid points. 
+        double DZ; //space between Z grid points. 
+
+        //plasma parameters
+        double psi_max;
+
 
         //Grids needed for the solver _-_-_-_-_-
         std::vector<std::vector<double> > current_psi_grid; //This grid stores the most recent value of the flux at each grid point in the domain.  
@@ -66,7 +72,7 @@ class Levitated_Dipole_Equilibrium{
         void initialise_label_grid(); //builds the label grid based on the geometry of the setup. 
 
         //Iterative solver tools _-_-_-_-_-
-        void calculate_pressure(std::vector<std::vector<double> >& generic_psi_grid);
+        std::vector<std::vector<double> > calculate_pressure(std::vector<std::vector<double> >& generic_psi_grid);
         void single_iteration(); //Runs a single round of the SOR iterator. 
         void tolerance_check(); //Samples the resulting solution to make sure that the next iteration is necessary.
         void solver(); //Runs the SOR solver. 
