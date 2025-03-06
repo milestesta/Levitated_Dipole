@@ -5,6 +5,8 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <fstream>
+
 
 class Levitated_Dipole_Equilibrium{
     private:
@@ -20,6 +22,7 @@ class Levitated_Dipole_Equilibrium{
         int NZ; //number of vertical grid points.
         double relaxation; //The relaxation paramter in the SOR solver.
         double tolerance; //User specified tolerance at which point to stop the solver.
+        double max_iter; //The maximum number of iterations the user is willing to tolerate. 
         double DR; //space between R grid points. 
         double DZ; //space between Z grid points. 
 
@@ -79,6 +82,6 @@ class Levitated_Dipole_Equilibrium{
         void solver(); //Runs the SOR solver. 
 
         //Data Output tools _-_-_-_-_-
-
+        void output_to_txt(std::string file_name, std::vector<std::vector<double> >& generic_grid);
 };
 #endif
