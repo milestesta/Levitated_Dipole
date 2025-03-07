@@ -29,7 +29,7 @@ class Levitated_Dipole_Equilibrium{
         //plasma parameters
         double psi_max;
         double mu_0;
-
+        double pressure_max;
 
         //Grids needed for the solver _-_-_-_-_-
         std::vector<std::vector<double> > current_psi_grid; //This grid stores the most recent value of the flux at each grid point in the domain.  

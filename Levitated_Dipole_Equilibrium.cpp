@@ -3,7 +3,7 @@
 //Constructor
 Levitated_Dipole_Equilibrium::Levitated_Dipole_Equilibrium() {
     //Default parameters. 
-        coil_minor_radius = 0.01; //minor radius of the levitated dipole. For now we assume the coil is circular.
+        coil_minor_radius = 0.1; //minor radius of the levitated dipole. For now we assume the coil is circular.
         coil_major_radius = 1.0; //major radius of the leviated dipole. 
         coil_height = 3.0; //height of the coil above the floor of the chamber. 
         chamber_width = 4.0; //width of the dipole containment chamber. 
@@ -21,6 +21,9 @@ Levitated_Dipole_Equilibrium::Levitated_Dipole_Equilibrium() {
         //plasma parameters
         psi_max = 1.0;
         mu_0 = 4*M_PI*1.e-7;
+        /* pressure_max = 10000; */
+        pressure_max = 100000;
+        pressure_max = 0;
 
         //Grids needed for the solver _-_-_-_-_-
 /*         current_psi_grid = Levitated_Dipole_Equilibrium::current_psi_grid; //This grid stores the most recent value of the flux at each grid point in the domain.  
@@ -162,11 +165,9 @@ std::vector<std::vector<double> > Levitated_Dipole_Equilibrium::calculate_pressu
         for(int j = 0; j < NZ; j++){
             if(label_grid[i][j] == 0){
                 psi = generic_psi_grid[i][j];
-                pressure = (1 - cos((psi/psi_max)*M_PI)); //just a place holder that vanishes at the edge. If you change
+                pressure = pressure_max*(1 - cos((psi/psi_max)*M_PI)); //just a place holder that vanishes at the edge. If you change
                 //this, make sure to change the derivative in the single_iteration function. 
                 pressure_grid[i][j] = pressure;
-                /* pressure_grid[i][j] = 0; //to test vacuum. */ 
-
             }
         }
     }
@@ -177,48 +178,46 @@ void Levitated_Dipole_Equilibrium::initialise_pressure_grid(){
     //This function uses the calculate_pressure function to assign a pressure to each point in the previous and current pressure grids. 
     current_pressure_grid = calculate_pressure(current_psi_grid);
     previous_pressure_grid = calculate_pressure(previous_pressure_grid);
-
-/*     for(int i = 0; i < NR; i++){
-        for (int j = 0; j < NZ; j++){
-            std::cout << current_pressure_grid[i][j] << " ";
-        }
-        std::cout << "\n";
-    } */
-
 };
 
 void Levitated_Dipole_Equilibrium::single_iteration(){
     double gamma = 0;
     double temp_psi = 0;
 
+//storing the old grid. 
     for(int i = 0; i < NR; i++){
         for(int j =0; j < NZ; j++){
             previous_psi_grid[i][j] = current_psi_grid[i][j];
         }
+//Calculating psi at the interior points. 
     for(int i = 1; i < NR; i++){
         for(int j =0; j < NZ; j++){
             if(label_grid[i][j] == 0){
-                gamma = -mu_0*(i*DR*i*DR)*((M_PI/psi_max)*sin((previous_psi_grid[i][j]/psi_max))); //pressure derivative term 
-  /*               gamma = 0; //to test vacuum.  */
+                gamma = -mu_0*(i*DR*i*DR)*(pressure_max*(M_PI/psi_max)*sin((previous_psi_grid[i][j]/psi_max))); //pressure derivative term 
                 temp_psi = (1/((2/(DR*DR))+(2/(DZ*DZ))))*(((1/(DR*DR))*(previous_psi_grid[i+1][j]+previous_psi_grid[i-1][j])) + ((1/(DZ*DZ))*(previous_psi_grid[i][j+1]+previous_psi_grid[i][j-1])) - ((1/(2*i*DR*DR))*(previous_psi_grid[i+1][j] - previous_psi_grid[i-1][j])) - gamma);
                 current_psi_grid[i][j] = (relaxation*previous_psi_grid[i][j]) + ((1-relaxation)*(temp_psi)); 
             }
         }
     }
+
+//calculating psi along the boundaries. 
+
+//at the inner boundary
     for(int j = 1; j < NZ-1; j++){
-        gamma = -mu_0*(i*DR*i*DR)*((M_PI/psi_max)*sin((previous_psi_grid[i][j]/psi_max))); //pressure derivative term.
-/*         gamma = 0; //to test vacuum.  */
+        gamma = -mu_0*(i*DR*i*DR)*(pressure_max*(M_PI/psi_max)*sin((previous_psi_grid[i][j]/psi_max))); //pressure derivative term.
         temp_psi = (1/((2/(DR*DR))+(2/(DZ*DZ))))*(((1/(DR*DR))*(previous_psi_grid[1][j]+previous_psi_grid[1][j])) + ((1/(DZ*DZ))*(previous_psi_grid[0][j+1]+previous_psi_grid[0][j-1])) - gamma);
          current_psi_grid[0][j] = ((1-relaxation)*previous_psi_grid[0][j]) + ((relaxation)*(temp_psi));
     }
     }    
+
+
+//updating the previous pressure grid to the new grid. 
     for(int i = 0; i < NR; i++){
         for(int j =0; j < NZ; j++){
             previous_pressure_grid[i][j] = current_pressure_grid[i][j];
         }
     }
-
-
+//updating the pressure grid based on the new flux. 
     current_pressure_grid = calculate_pressure(current_psi_grid);
 
 /* 
@@ -241,6 +240,7 @@ double Levitated_Dipole_Equilibrium::tolerance_check(){
     }
     return(epsilon/avg_prev_psi);
 };
+
 void Levitated_Dipole_Equilibrium::output_to_txt(std::string file_name, std::vector<std::vector<double> >& generic_grid){
     std::ofstream myfile(file_name); 
     for(int i = 0; i < NR; i++){
