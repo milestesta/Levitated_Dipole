@@ -6,6 +6,8 @@
 #include <vector>
 #include <cmath>
 #include <fstream>
+#include <boost/math/special_functions/ellint_1.hpp>
+#include <boost/math/special_functions/ellint_2.hpp>
 
 
 class Levitated_Dipole_Equilibrium{
@@ -30,13 +32,21 @@ class Levitated_Dipole_Equilibrium{
         double psi_max;
         double mu_0;
         double pressure_max;
+        double wall_psi; 
+
+        //coil parameters:
+        double coil_current; 
+        double coil_points;
+        double current_element;
 
         //Grids needed for the solver _-_-_-_-_-
         std::vector<std::vector<double> > current_psi_grid; //This grid stores the most recent value of the flux at each grid point in the domain.  
         std::vector<std::vector<double> > current_pressure_grid; //This grid stores the most recent pressure at each gridpoint, calculated via pressure(psi). 
         std::vector<std::vector<double> > previous_psi_grid; //This grid stores the previous value of the flux at each grid point in the domain.  
         std::vector<std::vector<double> > previous_pressure_grid; //This grid stores the previous pressure at each gridpoint. 
-        std::vector<std::vector<int> > label_grid; //This grid stores the label for each grid point. "0" = interior, "1" = outer boundaries, "2" = inner boundary, "3" = coil, "4" = vacuum
+        std::vector<std::vector<double> > label_grid; //This grid stores the label for each grid point. "0" = interior, "1" = outer boundaries, "2" = inner boundary, "3" = coil, "4" = vacuum
+        std::vector<std::vector<double> > GS_grid; //This grid stores value returned by running the GS operator over the grid. 
+        std::vector<std::vector<double> > source_grid; //This grid stores value of the RHS of the GS equation for comparison to GS_grid in validation. 
 
     public: 
         //The constructor. 
@@ -83,5 +93,9 @@ class Levitated_Dipole_Equilibrium{
 
         //Data Output tools _-_-_-_-_-
         void output_to_txt(std::string file_name, std::vector<std::vector<double> >& generic_grid);
+
+        //Verification Tools _-_-_-_-_-
+
+        void GS_check(); //Runs the Grad Shafranov operator over the grid to see if the solution worked. 
 };
 #endif
