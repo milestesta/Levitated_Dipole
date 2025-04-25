@@ -47,7 +47,11 @@ class Levitated_Dipole_Equilibrium{
         std::vector<std::vector<double> > label_grid; //This grid stores the label for each grid point. "0" = interior, "1" = outer boundaries, "2" = inner boundary, "3" = coil, "4" = vacuum
         std::vector<std::vector<double> > GS_grid; //This grid stores value returned by running the GS operator over the grid. 
         std::vector<std::vector<double> > source_grid; //This grid stores value of the RHS of the GS equation for comparison to GS_grid in validation. 
-
+        std::vector<std::vector<double> > coil_grid; //Stores the dipole field so it can be refreshed every iteration. 
+        std::vector<std::vector<double> > total_flux_grid; //Stores the flux of dipole plus plasma flux. 
+        //coordinate vectors for plotting. 
+        std::vector<double> R_grid;
+        std::vector<double> Z_grid;
     public: 
         //The constructor. 
         Levitated_Dipole_Equilibrium();
@@ -78,7 +82,14 @@ class Levitated_Dipole_Equilibrium{
 
         //Defining the actual calculation functions. 
         // plasma property calculators. _-_-_-_-_-
-        double pressure(); //contains the functional form for out pressure <-> psi relationship. 
+
+
+        double pressure_function(double flux); //contains the functional relationship for pressure <-> psi
+        double pressure_function_derivative(double flux); // derivative of pressure w.r.t. psi. 
+
+        void no_plasma_single_iterations();
+        void initial_relaxation(); //The initial loops to get psi before we inject the plasma. 
+
 
         //Setting up the simulation domain _-_-_-_-_-
         void initialise_psi_grid(); //builds up the psi grid based on a vacuum dipole field for our coil. 
