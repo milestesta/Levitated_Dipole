@@ -27,13 +27,15 @@ class Levitated_Dipole_Equilibrium{
         double max_iter; //The maximum number of iterations the user is willing to tolerate. 
         double DR; //space between R grid points. 
         double DZ; //space between Z grid points. 
-
+        double rescale_factor; //factor used to adjust pressure to keep particle number constant.  
         //plasma parameters
         double psi_max;
         double mu_0;
         double pressure_max;
         double wall_psi; 
-
+        double adiabatic_index; 
+        double N_0; //constant used to help fix particle number. 
+        double N_particles; //number of particles desired. 
         //coil parameters:
         double coil_current; 
         double coil_points;
