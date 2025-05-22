@@ -52,7 +52,7 @@ DR_dense  = (R[-1] - R[0])/n_R_upsample
 DZ_dense  = (Z[-1] - Z[0])/n_Z_upsample
 
 
-psi_level = (psi_dense.max() - psi_dense.min())*0.7#psi value of the contour I care about. 
+psi_level = (psi_dense.max() - psi_dense.min())*0.61#psi value of the contour I care about. 
 fig, ax = plt.subplots()
 contour_1 = ax.contour(R_dense, Z_dense, psi_dense, levels=[psi_level])
 contour_path = contour_1.collections[0].get_paths()
@@ -85,7 +85,11 @@ def swap_order(X, I):
     Y = np.concatenate((A, B))
     return(Y)
 
-
+def s_finder(y):
+    #For estimating the filter level that I chuck into univariate. 
+    dy = np.diff(y)
+    s = ((np.std(dy)/np.sqrt(2))**2.0)*len(y)
+    return(s)
 
 
 dp_dpsi = pressure_derivative(psi_level)
@@ -125,28 +129,35 @@ dZ_1[0] = dZ_1[-1]
 
 #Have to smooth the first derivatives again or I basically just get noise.
 #Sav-Gol wasn't working, so did some digging an univ seemed to work better. 
-dR_spline = UnivariateSpline(l, dR_1, s=1e-2)
-dZ_spline = UnivariateSpline(l, dZ_1, s=1e-2)
+# plt.figure()
+# plt.plot(l, dZ_1)
+# plt.title("Dr1 before")
 
+dR_spline = UnivariateSpline(l, dR_1, s=s_finder(dR_1))
+dZ_spline = UnivariateSpline(l, dZ_1, s=s_finder(dZ_1))
 
-dR_2 = dR_spline.derivative(1)(l)
-dZ_2 = dZ_spline.derivative(1)(l)
+# plt.figure()
+# plt.plot(l, dZ_spline(l))
+# plt.title("Dr1 after")
+dR_2 = dR_spline.derivative()(l)
+dZ_2 = dZ_spline.derivative()(l)
 
 
 dR_2[0] = dR_2[-1]
 dZ_2[0] = dZ_2[-1]
 
-
+# plt.figure()
+# plt.plot(l, dR_2)
+# plt.title("Dr2 before")
 #Now I have to make everything periodic again....
 
-derivative_smoothing_window = N//10 + (1 - (N//10)%2) 
-derivative_smoothing_poly_order = 3
+# derivative_smoothing_window = N//30 + (1 - (N//30)%2) 
+# derivative_smoothing_poly_order = 3
 
-dR_1 = savgol_filter(dR_1, derivative_smoothing_window, derivative_smoothing_poly_order, mode='wrap')
-dZ_1 = savgol_filter(dZ_1, derivative_smoothing_window, derivative_smoothing_poly_order, mode='wrap')
-dR_2 = savgol_filter(dR_2, derivative_smoothing_window, derivative_smoothing_poly_order, mode='wrap')
-dZ_2 = savgol_filter(dZ_2, derivative_smoothing_window, derivative_smoothing_poly_order, mode='wrap')
-
+# dR_1 = savgol_filter(dR_1, derivative_smoothing_window, derivative_smoothing_poly_order, mode='wrap')
+# dZ_1 = savgol_filter(dZ_1, derivative_smoothing_window, derivative_smoothing_poly_order, mode='wrap')
+# dR_2 = savgol_filter(dR_2, derivative_smoothing_window, derivative_smoothing_poly_order, mode='wrap')
+# dZ_2 = savgol_filter(dZ_2, derivative_smoothing_window, derivative_smoothing_poly_order, mode='wrap')
 
 
 
@@ -154,6 +165,7 @@ dZ_2 = savgol_filter(dZ_2, derivative_smoothing_window, derivative_smoothing_pol
 #Calculating curvature:-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
 
 unit_tangent = np.sqrt((dR_1**2.0)+(dZ_1**2.0))
+
 normal_mag = np.sqrt((dR_2**2.0)+(dZ_2**2.0))
 unit_normal_R = dR_2/normal_mag
 unit_normal_Z = dZ_2/normal_mag
@@ -164,7 +176,9 @@ kappa_Z = kappa*unit_normal_Z
 
 # plt.figure()
 # plt.title("Curvature Magnitude")
-# plt.plot(l, kappa)
+# plt.plot(l, kappa_R)
+
+
 
 
 #Calculating Grad_psi on the contour. -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
@@ -180,21 +194,33 @@ grad_psi_window = N//10 + (1 - (N//10)%2)
 grad_psi_poly_order = 3
 
 
-d_psi_d_R_contour = savgol_filter(d_psi_d_R_contour, grad_psi_window, grad_psi_poly_order, mode='wrap')
-d_psi_d_Z_contour = savgol_filter(d_psi_d_Z_contour, grad_psi_window, grad_psi_poly_order, mode='wrap')
-d_psi_d_R_contour[0] = d_psi_d_R_contour[-1]
-d_psi_d_Z_contour[0] = d_psi_d_Z_contour[-1]
+# plt.figure()
+# plt.plot(l, d_psi_d_R_contour)
+# plt.title('checking dpsidR before')
 
 
+
+# d_psi_d_R_contour = savgol_filter(d_psi_d_R_contour, grad_psi_window, grad_psi_poly_order, mode='wrap')
+# d_psi_d_Z_contour = savgol_filter(d_psi_d_Z_contour, grad_psi_window, grad_psi_poly_order, mode='wrap')
+# d_psi_d_R_contour[0] = d_psi_d_R_contour[-1]
+# d_psi_d_Z_contour[0] = d_psi_d_Z_contour[-1]
+
+
+# plt.figure()
+# plt.plot(l, d_psi_d_R_contour)
+# plt.title('checking dpsidR after')
 #I now have to calculate the derivatives of the components of grad psi w.r.t l. 
 
-d_psi_d_R_spline = UnivariateSpline(l, d_psi_d_R_contour, s=1e-5)
-d_psi_d_Z_spline = UnivariateSpline(l, d_psi_d_Z_contour, s=1e-5)
+d_psi_d_R_spline = UnivariateSpline(l, d_psi_d_R_contour, s=s_finder(d_psi_d_R_contour))
+d_psi_d_Z_spline = UnivariateSpline(l, d_psi_d_Z_contour, s=s_finder(d_psi_d_Z_contour))
 
 
+d_grad_psi_dl_R = d_psi_d_R_spline.derivative()(l)
+d_grad_psi_dl_Z = d_psi_d_Z_spline.derivative()(l)
 
-d_grad_psi_dl_R = d_psi_d_R_spline.derivative(1)(l)
-d_grad_psi_dl_Z = d_psi_d_Z_spline.derivative(1)(l)
+# plt.figure()
+# plt.plot(l, d_grad_psi_dl_R)
+# plt.title('checking grad deriv. BEFORE')
 
 #and making it periodic again. 
 
@@ -203,15 +229,17 @@ d_grad_psi_dl_Z  = savgol_filter(d_grad_psi_dl_Z , grad_psi_window, grad_psi_pol
 d_grad_psi_dl_R[0] = d_grad_psi_dl_R[-1]
 d_grad_psi_dl_Z[0] = d_grad_psi_dl_Z[-1]
 
-plt.figure()
-plt.plot(l, d_grad_psi_dl_R)
-plt.title('checking grad deriv. AFTER')
+# plt.figure()
+# plt.plot(l, d_grad_psi_dl_R)
+# plt.title('checking grad deriv. AFTER')
 mag_grad_psi = np.sqrt((d_psi_d_R_contour*d_psi_d_R_contour)+(d_psi_d_Z_contour*d_psi_d_Z_contour))
 mag_grad_psi_2 = mag_grad_psi*mag_grad_psi
 
 
 
-
+# plt.figure()
+# plt.plot(l, mag_grad_psi)
+# plt.title('|\grad psi|')
 
 #grad psi dot kappa _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
 grad_psi_dot_kappa = (kappa_R*d_psi_d_R_contour) + (kappa_Z*d_psi_d_Z_contour)
@@ -220,8 +248,12 @@ grad_psi_dot_kappa = (kappa_R*d_psi_d_R_contour) + (kappa_Z*d_psi_d_Z_contour)
 
 
 #d(grad_psi)/dl _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
-grad_psi_univ = UnivariateSpline(l, mag_grad_psi, s=1e-5)
-d_grad_psi_dl = grad_psi_univ.derivative(1)(l)
+grad_psi_univ = UnivariateSpline(l, mag_grad_psi, s=s_finder(mag_grad_psi))
+new_mag_grad_psi = grad_psi_univ(l)
+# plt.figure()
+# plt.plot(l, new_mag_grad_psi)
+# plt.title('new |\grad psi|')
+d_grad_psi_dl = grad_psi_univ.derivative()(l)
 d_grad_psi_dl[0] = d_grad_psi_dl[-1]
 
 
@@ -323,22 +355,47 @@ A3_arr = np.zeros(N)
 
 for i in range(0, N): 
     A1_arr[i] = mag_grad_psi_2[i]
-    A2_arr[i] = 2*(d_psi_d_R_contour[i]*d_grad_psi_dl_R[i] + d_psi_d_Z_contour[i]*d_grad_psi_dl_Z[i])
-    A3_arr[i] = (2*mu_0 / B_2[i]) * mag_grad_psi_2[i] * dp_dpsi * grad_psi_dot_kappa[i]
+    A2_arr[i] = 2.0*(d_psi_d_R_contour[i]*d_grad_psi_dl_R[i] + d_psi_d_Z_contour[i]*d_grad_psi_dl_Z[i])
+    A3_arr[i] = (2.0*mu_0 / B_2[i]) * mag_grad_psi_2[i] * dp_dpsi * grad_psi_dot_kappa[i]
 
 
-A1 = UnivariateSpline(l, A1_arr, s=1e-5)
-A2 = UnivariateSpline(l, A2_arr, s=1e-5)
-A3 = UnivariateSpline(l, A3_arr, s=1e-5)
+# plt.figure()
+# plt.plot(l, A1_arr)
+# plt.title("A1")
+# plt.figure()
+# plt.plot(l, A2_arr)
+# plt.title("A2")
+# plt.figure()
+# plt.plot(l, A3_arr)
+# plt.title("A3")
 
-A1_p = A1.derivative(1)
-A2_p = A2.derivative(1)
+A1 = UnivariateSpline(l, A1_arr, s=s_finder(A1_arr))
+A2 = UnivariateSpline(l, A2_arr, s=s_finder(A2_arr))
+A3 = UnivariateSpline(l, A3_arr, s=s_finder(A3_arr))
+
+
+plt.figure()
+plt.plot(l, A1(l))
+plt.title("A1")
+plt.figure()
+plt.plot(l, A2(l))
+plt.title("A2")
+plt.figure()
+plt.plot(l, A3(l))
+plt.title("A3")
+
+# A1_p = A1.derivative()(l)
+# A2_p = A2.derivative()(l)
 
 
 y_guess = np.zeros((2, N))
 # small sinusoidal perturbation
-y_guess[0] = 1e-4*np.cos(2*np.pi*l / l[-1])
-y_guess[1] = -(2*np.pi/l[-1])*1e-4*np.sin(2*np.pi*l / l[-1])
+y_guess[0] = 1e-7*np.cos(6*np.pi*l / l[-1])
+y_guess[1] = -(6*np.pi/l[-1])*1e-7*np.sin(6*np.pi*l / l[-1])
+
+# y_guess[0] = np.ones(N)*1e-5
+# y_guess[1] = np.zeros(N)
+
 
 def rhs(l, y):
     # y[0] = Gamma, y[1] = dGamma/dl I keep messing this up
@@ -348,7 +405,7 @@ def rhs(l, y):
 def bc(ya, yb):
     return np.array([ya[0] - yb[0], ya[1] - yb[1]])
 
-solution = solve_bvp(rhs, bc, l, y_guess, tol = 1e-4, max_nodes = 100)
+solution = solve_bvp(rhs, bc, l, y_guess, tol = 1e-10, max_nodes = 100)
 gamma = solution.sol(l)
 gamma = gamma[0]
 print(len(gamma))
