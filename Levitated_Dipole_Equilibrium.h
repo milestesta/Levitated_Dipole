@@ -6,8 +6,10 @@
 #include <vector>
 #include <cmath>
 #include <fstream>
+#include <omp.h>
 #include <boost/math/special_functions/ellint_1.hpp>
 #include <boost/math/special_functions/ellint_2.hpp>
+
 
 
 class Levitated_Dipole_Equilibrium{
@@ -41,6 +43,7 @@ class Levitated_Dipole_Equilibrium{
         double coil_points;
         double current_element;
 
+        double current_particle_number; 
         //Grids needed for the solver _-_-_-_-_-
         std::vector<std::vector<double> > current_psi_grid; //This grid stores the most recent value of the flux at each grid point in the domain.  
         std::vector<std::vector<double> > current_pressure_grid; //This grid stores the most recent pressure at each gridpoint, calculated via pressure(psi). 

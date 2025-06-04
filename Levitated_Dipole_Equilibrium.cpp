@@ -1,22 +1,23 @@
 #include "Levitated_Dipole_Equilibrium.h"
+#include <omp.h>
 
-//source: Desktop/Levitated_Dipole_Summer_2025/Levitated_Dipole-main/N-limited_solver
-//compile with g++ -std=c++14 -I/opt/homebrew/include Levitated_Dipole_Equilibrium.cpp -o test
+//source: Desktop/Levitated_Dipole_Summer_2025/Levitated_Dipole-main/integrated_solver_parallel
+//compile with g++-14 -std=c++14 -I/opt/homebrew/include -fopenmp Levitated_Dipole_Equilibrium.cpp -o test
 //Constructor
 Levitated_Dipole_Equilibrium::Levitated_Dipole_Equilibrium(){
     //Default parameters. 
-        coil_minor_radius = 0.05; //minor radius of the levitated dipole. For now we assume the coil is circular.
-        coil_major_radius = 0.6; //major radius of the leviated dipole. 
-        coil_height = 0.6; //height of the coil above the floor of the chamber. 
+        coil_minor_radius = 0.1; //minor radius of the levitated dipole. For now we assume the coil is circular.
+        coil_major_radius = 0.5; //major radius of the leviated dipole. 
+        coil_height = 1.0; //height of the coil above the floor of the chamber. 
         chamber_width = 3.0; //width of the dipole containment chamber. 
         chamber_height = 3.0; //height of the dipole containment chamber. 
 
         //Simulation Parameters _-_-_-_-_-
-        NR = 150; //number of horizontal grid points.
-        NZ = 150; //number of vertical grid points.
-        relaxation = -0.3; //The relaxation paramter in the SOR solver. Multiplies the contribution from the old psi values. negative for SOR
-        tolerance = 1e-7; //User specified percentage tolerance at which point to stop the solver.
-        max_iter = 30000;
+        NR = 50; //number of horizontal grid points.
+        NZ = 50; //number of vertical grid points.
+        relaxation = 0.1; //The relaxation paramter in the SOR solver. Multiplies the contribution from the old psi values. negative for SOR
+        tolerance = 1e-4; //User specified percentage tolerance at which point to stop the solver.
+        max_iter = 4000;
 
         DZ = chamber_height/NZ;
         DR = chamber_width/NR;
@@ -24,16 +25,17 @@ Levitated_Dipole_Equilibrium::Levitated_Dipole_Equilibrium(){
         //plasma parameters
         psi_max = 1; //set to be similar to the psi from the coil alone. 
         mu_0 = 4*M_PI*1e-7;
-        pressure_max = 689476.0; //Pascals
+        // pressure_max = 689476.0; //Pascals
         adiabatic_index = 5.0/3.0;
         rescale_factor = 1.0;
-        //pressure_max=1000000.0;
+        pressure_max=1.0e6;
         //pressure_max = 0;
         wall_psi = 0;
         N_0 = 0;
-        N_particles = 1e40;
+        N_particles = 1e20;
+        current_particle_number = 0; 
         //coil parameters:
-        coil_current = 1.0e6; //amperes
+        coil_current = 1.0e4; //amperes
         coil_points = 100;
         current_element = (coil_current)/(coil_points); //current per unit poloidal length of the ring. 
 
@@ -114,6 +116,7 @@ void Levitated_Dipole_Equilibrium::initialise_label_grid(){
         label_grid[NR-1][i] = 1;
     };
     label_grid[0][0] = 2; //fixing the issue where the corner doesn't get labeled. 
+    // #pragma omp parallel for collapse(2) 
     for(int i = 1; i < NR; i++){
         R = i*DR;
         for (int j = 1; j < NZ; j++){
@@ -127,7 +130,7 @@ void Levitated_Dipole_Equilibrium::initialise_label_grid(){
             } 
         } 
     }
-
+    // #pragma omp parallel for collapse(2) 
     for(int i = 1; i < NR; i++){
         R = i*DR;
         for (int j = 1; j < NZ; j++){
@@ -244,7 +247,9 @@ void Levitated_Dipole_Equilibrium::initialise_psi_grid(){
 
     //Running iterations to relax /psi to what it will be before adding the plasma. 
     //initial_relaxation();
-    output_to_txt("initial_grid.txt", current_psi_grid);
+    // output_to_txt("initial_grid.txt", current_psi_grid);
+    output_to_txt("initial_grid.txt", coil_grid);
+
 
 
 };
@@ -259,13 +264,17 @@ double Levitated_Dipole_Equilibrium::pressure_function(double flux){
     // else{
     //     return(pressure_max*(1 - cos((flux/psi_max)*M_PI)));
     // }
-
-    return(pressure_max*(1 - cos((flux/psi_max)*M_PI)));
+    
+    // return(pressure_max*(1 - cos((flux/psi_max)*M_PI)));
+    return(pressure_max*(1 - cos((flux/psi_max)*M_PI)*cos((flux/psi_max)*M_PI)));
+    // return(pressure_max*flux*flux*exp(-flux*flux));
 }
 
 double Levitated_Dipole_Equilibrium::pressure_function_derivative(double flux){
     if(pressure_function(flux) > 0){
-        return(pressure_max*M_PI/psi_max)*(sin((flux)*M_PI/psi_max));
+        // return(pressure_max*M_PI/psi_max)*(sin((flux)*M_PI/psi_max));
+        return(2*pressure_max*M_PI/psi_max)*(cos((flux)*M_PI/psi_max))*(sin((flux)*M_PI/psi_max));
+        // return(pressure_max*(2*flux*exp(-flux*flux))*(1 - (flux*flux)));
     }
     else{
         return(0);
@@ -281,6 +290,7 @@ std::vector<std::vector<double> > Levitated_Dipole_Equilibrium::calculate_pressu
     double psi = 0; //A temporary psi value for the computation.
     double pressure = 0; //A temporaty pressure value for the computation.
     std::vector<std::vector<double> > pressure_grid;
+    
     pressure_grid.resize(NR, std::vector<double>(NZ, 0.0));
     for(int i = 0; i < NR; i++){
         for(int j = 0; j < NZ; j++){
@@ -301,7 +311,8 @@ void Levitated_Dipole_Equilibrium::initialise_pressure_grid(){
     //This function uses the calculate_pressure function to assign a pressure to each point in the previous and current pressure grids. 
     current_pressure_grid = calculate_pressure(current_psi_grid);
     previous_pressure_grid = calculate_pressure(previous_psi_grid);
-    double pressure_integral = 0; //The holder for the pressure volume integral. 
+    double pressure_integral = 0; //The holder for the pressure volume integral.
+    #pragma omp parallel for collapse(2) reduction(+:pressure_integral)
     for(int i=0; i< NR; i++){
         for(int j =0; j<NZ; j++){
             if(label_grid[i][j] == 0){
@@ -310,22 +321,36 @@ void Levitated_Dipole_Equilibrium::initialise_pressure_grid(){
         }
     }
     N_0 = N_particles/pressure_integral; //setting the constant in the adiabatic pressure law. 
+    pressure_integral = 0;
+    #pragma omp parallel for collapse(2) reduction(+:pressure_integral)
+    for(int i=0; i< NR; i++){
+        for(int j =0; j<NZ; j++){
+            if(label_grid[i][j] == 0){
+                pressure_integral += N_0*DR*DZ*(pow(current_pressure_grid[i][j], (1.0/adiabatic_index)));
+            }
+        }
+    }
+    current_particle_number = pressure_integral; 
     std::cout << "finished pressure init" << "\n";
-    std::cout << "pressure constant set as " << N_0 << "\n";    
+    std::cout << "pressure constant set as " << N_0 << "\n";
+    std::cout << "Particle number fixed to " << current_particle_number << "\n";    
 };
 
 void Levitated_Dipole_Equilibrium::single_iteration(){
     double gamma = 0;
     double temp_psi = 0;
 
-//storing the old grid, abd building the total flux. 
+//storing the old grid, and building the total flux. 
+
     for(int i = 0; i < NR; i++){
         for(int j =0; j < NZ; j++){
             previous_psi_grid[i][j] = current_psi_grid[i][j];
             total_flux_grid[i][j] = coil_grid[i][j] + current_psi_grid[i][j];
         }
+    }
 
-//Calculating psi at the interior points. 
+//Calculating psi at the interior points.
+    #pragma omp parallel for collapse(2) private(gamma, temp_psi)
     for(int i = 1; i < NR; i++){
         for(int j =0; j < NZ; j++){
             if(label_grid[i][j] == 0){
@@ -360,15 +385,15 @@ void Levitated_Dipole_Equilibrium::single_iteration(){
 
 //at the inner boundary. Using the left right symmetry of the dipole chamber. 
     for(int j = 1; j < NZ-1; j++){
-        gamma = -rescale_factor*mu_0*(i*DR*i*DR)*(pressure_function_derivative(total_flux_grid[i][j])); //pressure derivative term.
+        gamma = -rescale_factor*mu_0*(DR*DR)*(pressure_function_derivative(total_flux_grid[1][j])); //pressure derivative term.
         temp_psi = (1/((2/(DR*DR))+(2/(DZ*DZ))))*(((1/(DR*DR))*(previous_psi_grid[1][j]+previous_psi_grid[1][j])) + ((1/(DZ*DZ))*(previous_psi_grid[0][j+1]+previous_psi_grid[0][j-1])) - gamma);
         current_psi_grid[0][j] = ((relaxation)*previous_psi_grid[0][j]) + ((1-relaxation)*(temp_psi));
-        source_grid[i][j] = gamma;
-    }
+        source_grid[1][j] = gamma;
     }    
 //
 
-//updating the previous pressure grid to the new grid. 
+//updating the previous pressure grid to the new grid.
+    #pragma omp parallel for collapse(2)
     for(int i = 0; i < NR; i++){
         for(int j =0; j < NZ; j++){
             previous_pressure_grid[i][j] = current_pressure_grid[i][j];
@@ -377,7 +402,8 @@ void Levitated_Dipole_Equilibrium::single_iteration(){
 //updating the pressure grid based on the new flux. 
     current_pressure_grid = calculate_pressure(total_flux_grid);
     //We now need to rescale the overall pressure by a factor that makes sure the number of particles in the system is constant. 
-    double pressure_integral = 0; //The holder for the pressure volume integral. 
+    double pressure_integral = 0; //The holder for the pressure volume integral.
+    #pragma omp parallel for collapse(2) reduction(+:pressure_integral)
     for(int i=0; i< NR; i++){
         for(int j =0; j<NZ; j++){
             if(label_grid[i][j] == 0){
@@ -386,6 +412,18 @@ void Levitated_Dipole_Equilibrium::single_iteration(){
         }
     }
     rescale_factor = pow((N_particles/pressure_integral), adiabatic_index); //rescaling the pressure. 
+    current_particle_number = pressure_integral*pow(rescale_factor, (1.0/adiabatic_index));
+    // for(int i=0; i< NR; i++){
+    //     for(int j =0; j<NZ; j++){
+    //         if(label_grid[i][j] == 0){
+    //             current_pressure_grid[i][j] = rescale_factor*current_pressure_grid[i][j];
+    //         }
+    //     }
+    // }
+
+    std::cout << "Particle number is currently " << current_particle_number << "\n";
+    std::cout << "Rescale factor: " << rescale_factor << "\n";
+    std::cout << "\n"; 
     // for(int i=0; i< NR; i++){
     //     for(int j =0; j<NZ; j++){
     //         if(label_grid[i][j] == 0){
@@ -402,11 +440,14 @@ double Levitated_Dipole_Equilibrium::tolerance_check(){
     double diff = 0;
     double mean = 0;
     double N_points = 0; 
-    double offset = 1e-8; //offset to avoid division by 0 in the tolerance. 
+    double offset = 0; //offset to avoid division by 0 in the tolerance.
+    #pragma omp parallel for collapse(2) reduction(+:diff, N_points)
     for(int i = 0; i < NR; i++){
         for(int j =0; j < NZ; j++){
+                if (current_psi_grid[i][j] != 0){
                 diff += ((abs(current_psi_grid[i][j] - previous_psi_grid[i][j])/(abs(current_psi_grid[i][j])+offset))*100); //average percentage change 
                 N_points += 1; 
+                }
             }
         }
     return(diff/N_points);
@@ -420,7 +461,7 @@ void Levitated_Dipole_Equilibrium::no_plasma_single_iterations(){
         for(int j =0; j < NZ; j++){
             previous_psi_grid[i][j] = current_psi_grid[i][j];
         }
-
+    }
 //Calculating psi at the interior points. 
     for(int i = 1; i < NR; i++){
         for(int j =0; j < NZ; j++){
@@ -456,9 +497,7 @@ void Levitated_Dipole_Equilibrium::no_plasma_single_iterations(){
         temp_psi = (1/((2/(DR*DR))+(2/(DZ*DZ))))*(((1/(DR*DR))*(previous_psi_grid[1][j]+previous_psi_grid[1][j])) + ((1/(DZ*DZ))*(previous_psi_grid[0][j+1]+previous_psi_grid[0][j-1])));
          current_psi_grid[0][j] = ((relaxation)*previous_psi_grid[0][j]) + ((1-relaxation)*(temp_psi));
     }
-    }    
-//
-};
+};    
 
 void Levitated_Dipole_Equilibrium::initial_relaxation(){
     double epsilon = 1;
@@ -477,7 +516,8 @@ void Levitated_Dipole_Equilibrium::GS_check(){
     double term_1;
     double term_2;
     double term_3;
-    double gamma; //pressure source term. 
+    double gamma; //pressure source term.
+    // #pragma omp parallel for collapse(2) private(gamma)
     for(int i = 0; i < NR; i++){
         for(int j =0; j < NZ; j++){
             if(label_grid[i][j] == 0){ 
@@ -495,7 +535,7 @@ void Levitated_Dipole_Equilibrium::GS_check(){
 
 
 void Levitated_Dipole_Equilibrium::output_to_txt(std::string file_name, std::vector<std::vector<double> >& generic_grid){
-    std::ofstream myfile(file_name); 
+    std::ofstream myfile(file_name);
     for(int i = 0; i < NR; i++){
         for (int j = 0; j < NZ; j++){
             myfile << generic_grid[i][j] << " ";
